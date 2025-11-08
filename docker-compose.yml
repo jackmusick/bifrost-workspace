@@ -24,7 +24,7 @@ services:
       - AzureWebJobsSecretStorageType=files
       # Note: Must be 1 when ENABLE_DEBUGGING=true to avoid debugpy port conflicts
       - FUNCTIONS_WORKER_PROCESS_COUNT=${FUNCTIONS_WORKER_PROCESS_COUNT:-1}
-      - ENABLE_DEBUGGING=false
+      - ENABLE_DEBUGGING=${ENABLE_DEBUGGING:-true}
       - AZURE_FUNCTIONS_ENVIRONMENT=Development
       - BIFROST_WORKSPACE_LOCATION=/mounts/workspace
       - BIFROST_TEMP_LOCATION=/mounts/tmp
