@@ -1,0 +1,65 @@
+services:
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:latest
+    ports:
+      - "10000:10000" # Blob
+      - "10001:10001" # Queue
+      - "10002:10002" # Table
+    command: "azurite --blobHost 0.0.0.0 --queueHost 0.0.0.0 --tableHost 0.0.0.0 --loose"
+    volumes:
+      - azurite-data:/data
+    healthcheck:
+      test: ["CMD", "nc", "-z", "azurite", "10000"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  api:
+    image: bifrost-api
+    ports:
+      - "7071:80" # Azure Functions runtime
+      - "5678:5678" # Debugpy (Python debugger for workflow debugging)
+    environment:
+      - AzureWebJobsStorage=DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;QueueEndpoint=http://azurite:10001/devstoreaccount1;TableEndpoint=http://azurite:10002/devstoreaccount1;
+      - AzureWebJobsSecretStorageType=files
+      # Note: Must be 1 when ENABLE_DEBUGGING=true to avoid debugpy port conflicts
+      - FUNCTIONS_WORKER_PROCESS_COUNT=${FUNCTIONS_WORKER_PROCESS_COUNT:-1}
+      - ENABLE_DEBUGGING=false
+      - AZURE_FUNCTIONS_ENVIRONMENT=Development
+      - BIFROST_WORKSPACE_LOCATION=/mounts/workspace
+      - BIFROST_TEMP_LOCATION=/mounts/tmp
+      # User Settings
+      - WEBSITE_AUTH_ENCRYPTION_KEY=${WEBSITE_AUTH_ENCRYPTION_KEY:-C0sm0Rk3y567890123456789012345678901234567890123456789012345}
+      - AZURE_KEY_VAULT_URL=${AZURE_KEY_VAULT_URL}
+      - WebPubSubConnectionString=${WebPubSubConnectionString}
+      # Azure CLI authentication (for DefaultAzureCredential)
+      - AZURE_TENANT_ID=${ENTRA_TENANT_ID}
+      - AZURE_CLIENT_ID=${ENTRA_CLIENT_ID}
+      - AZURE_CLIENT_SECRET=${ENTRA_CLIENT_SECRET}
+    volumes:
+      - ./workspace/:/mounts/workspace # Mount workspace for workflow debugging
+      - ./temp/:/mounts/tmp
+    depends_on:
+      azurite:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/api/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  client:
+    image: bifrost-client
+    # ports:
+    #   - "4280:4280" # SWA CLI (web interface)
+    network_mode: "host"
+    environment:
+      # - API_URL=http://localhost:7071
+      - ENTRA_CLIENT_ID=${ENTRA_CLIENT_ID}
+      - ENTRA_CLIENT_SECRET=${ENTRA_CLIENT_SECRET}
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  azurite-data:
